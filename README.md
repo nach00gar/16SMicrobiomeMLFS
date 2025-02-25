@@ -9,7 +9,7 @@ The repository contains the following folders:
 * **4. figures**
 
 
-# License: This project is licensed under GNU GPL 3.0 - check LICENSE file for more details.
+## License: This project is licensed under GNU GPL 3.0 - check LICENSE file for more details.
 
 
 
