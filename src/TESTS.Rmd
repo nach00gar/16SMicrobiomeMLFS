@@ -1,0 +1,287 @@
+---
+title: "Statistical Tests and Plots"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+```{r}
+library(tidyr)
+library(ggpubr)
+library(dplyr)
+```
+
+
+```{r}
+# Cargar la librería
+library(ggpubr)
+
+# Leer los datos
+tss <- read.csv("TSS Comparison.csv")
+clr <- read.csv("CLR Comparison.csv")
+
+# Realizar las pruebas estadísticas
+rf_test <- wilcox.test(tss$RandomForest, clr$RandomForest, paired = TRUE)
+lr_test <- wilcox.test(tss$LogisticRegression, clr$LogisticRegression, paired = TRUE)
+cross_test <- wilcox.test(tss$RandomForest, clr$LogisticRegression, paired = TRUE)
+mean_test <- wilcox.test(rowMeans(tss[, -1]), rowMeans(clr[, -1]), paired = TRUE)
+
+resultado <- friedman.test(as.matrix(tss[, -1]))
+p_annotation <- paste0("Friedman Test p-value: ", signif(resultado$p.value, 3))
+
+
+tss_long <- tss %>%
+    pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance")
+
+clr_long <- clr %>%
+    pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance")
+
+g1 <- ggboxplot(
+     data = tss_long,
+     x = "Classifier", 
+     y = "Performance",
+     color = "Classifier", # Opcional: para colorear por clasificador
+     palette = "jco",      # Paleta de colores
+     add = "jitter",       # Agrega puntos dispersos para ver la variabilidad
+     xlab = "Classifiers", 
+     ylab = "Performance (AUC)",
+     #title = "Performance by Classifier with Relative Abundances"
+ ) + 
+     annotate("text", 
+              x = 4, y = 0.95, # Ajusta la posición del texto en el gráfico
+              label = p_annotation, 
+              size = 6, 
+              color = "black") +
+  theme(
+    legend.text = element_text(size = 16) # Cambia el tamaño de la letra de la leyenda
+  )
+
+resultado <- friedman.test(as.matrix(clr[, -1]))
+p_annotation <- paste0("Friedman Test p-value: ", signif(resultado$p.value, 3))
+
+g2 <- ggboxplot(
+     data = clr_long,
+     x = "Classifier", 
+     y = "Performance",
+     color = "Classifier", # Opcional: para colorear por clasificador
+     palette = "jco",      # Paleta de colores
+     add = "jitter",       # Agrega puntos dispersos para ver la variabilidad
+     xlab = "Classifiers", 
+     ylab = "Performance (AUC)",
+     #title = "Performance by Classifier with CLR Normalization"
+ ) + 
+     annotate("text", 
+              x = 4, y = 0.95, # Ajusta la posición del texto en el gráfico
+              label = p_annotation, 
+              size = 6, 
+              color = "black") +
+  theme(
+    legend.text = element_text(size = 16) # Cambia el tamaño de la letra de la leyenda
+  )
+
+
+
+# Preparar los datos para ggpubr
+df_rf <- data.frame(
+  Method = rep(c("RA", "CLR"), each = nrow(tss)),
+  Performance = c(tss$RandomForest, clr$RandomForest)
+)
+
+df_lr <- data.frame(
+  Method = rep(c("RA", "CLR"), each = nrow(tss)),
+  Performance = c(tss$LogisticRegression, clr$LogisticRegression)
+)
+
+df_cross <- data.frame(
+  Method = rep(c("RA_RF", "CLR_LR"), each = nrow(tss)),
+  Performance = c(tss$RandomForest, clr$LogisticRegression)
+)
+
+df_mean <- data.frame(
+  Method = rep(c("RA_Mean", "CLR_Mean"), each = nrow(tss)),
+  Performance = c(rowMeans(tss[, -1]), rowMeans(clr[, -1]))
+)
+
+# Graficar Random Forest
+rf_plot <- ggboxplot(
+  df_rf, x = "Method", y = "Performance", fill = "Method",
+  palette = "jco", add = "jitter", title = "Random Forest Comparison"
+) +
+  stat_compare_means(
+    method = "wilcox.test", paired = TRUE,
+    label = "p.format", 
+    comparisons = list(c("RA", "CLR"))
+  ) +
+  labs(y = "Performance (AUC)", x = "")
+
+# Graficar Logistic Regression
+lr_plot <- ggboxplot(
+  df_lr, x = "Method", y = "Performance", fill = "Method",
+  palette = "jco", add = "jitter", title = "Logistic Regression Comparison"
+) +
+  stat_compare_means(
+    method = "wilcox.test", paired = TRUE,
+    label = "p.format", 
+    comparisons = list(c("RA", "CLR"))
+  ) +
+  labs(y = "Performance (AUC)", x = "")
+
+# Comparación cruzada
+cross_plot <- ggboxplot(
+  df_cross, x = "Method", y = "Performance", fill = "Method",
+  palette = "jco", add = "jitter", title = "Cross Comparison (RF vs LR)"
+) +
+  stat_compare_means(
+    method = "wilcox.test", paired = TRUE,
+    label = "p.format", 
+    comparisons = list(c("RA_RF", "CLR_LR"))
+  ) +
+  labs(y = "Performance (AUC)", x = "")
+
+mean_plot <- ggboxplot(
+  df_mean, x = "Method", y = "Performance", fill = "Method",
+  palette = "jco", add = "jitter", title = "Mean Comparison (All Classifiers)"
+) +
+  stat_compare_means(
+    method = "wilcox.test", paired = TRUE,
+    label = "p.format", 
+    comparisons = list(c("RA_Mean", "CLR_Mean"))
+  ) +
+  labs(y = "Performance (AUC)", x = "")
+
+# Combinar gráficos
+combined_plot <- ggarrange(rf_plot, lr_plot, cross_plot, mean_plot, 
+                           ncol = 4, nrow = 1, 
+                           labels = c("A", "B", "C", "D"))+
+  theme(
+    legend.text = element_text(size = 19) # Cambia el tamaño de la letra de la leyenda
+  )
+
+# Mostrar los gráficos
+print(combined_plot)
+
+
+
+```
+
+
+
+
+```{r}
+library(ggpubr)
+lr <- read.csv("LRComparison.csv")
+
+resultado <- friedman.test(as.matrix(lr[, -1]))
+p_annotation <- paste0("Friedman Test p-value: ", signif(resultado$p.value, 3))
+
+
+
+lr_long <- lr %>%
+    pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance")
+
+colnames(lr_long) <- c("Dataset", "Method", "Performance")
+
+
+g <- ggboxplot(
+     data = lr_long,
+     x = "Method", 
+     y = "Performance",
+     color = "Method", # Opcional: para colorear por clasificador
+     palette = "jco",      # Paleta de colores
+     add = "jitter",       # Agrega puntos dispersos para ver la variabilidad
+     xlab = "Feature Selection Method", 
+     ylab = "Performance (AUC)",
+     title = "Logistic Regression performance with Feature Selection"
+ ) + 
+     annotate("text", 
+              x = 8, y = 0.95, # Ajusta la posición del texto en el gráfico
+              label = p_annotation, 
+              size = 4, 
+              color = "black")
+
+
+```
+
+
+
+```{r}
+rafs <- read.csv("NestedRAFeatureSelection.csv")
+clrfs <- read.csv("NestedCLRFeatureSelection.csv")
+
+
+# Combinar los datos en un único dataframe
+combined_data <- data.frame(
+  Method = rep(c("RA", "CLR"), each = nrow(rafs)),
+  AUC = c(rafs$AUC, clrfs$AUC)
+)
+
+# Realizar el test de Wilcoxon
+wilcox_test <- wilcox.test(rafs$AUC, clrfs$AUC, paired=TRUE)
+
+# Crear el boxplot
+g1 <- ggboxplot(
+  combined_data, 
+  x = "Method", 
+  y = "AUC", 
+  color = "Method", 
+  palette = "jco",
+  add = "jitter"
+) +
+  stat_compare_means(method = "wilcox.test", paired=TRUE, label = "p.signif") + # Mostrar el valor p en el gráfico
+  labs(
+    x = "Normalization Technique",
+    y = "AUC"
+  ) +
+  theme_minimal() + 
+     annotate("text", 
+              x = 2, y = 0.95, # Ajusta la posición del texto en el gráfico
+              label = wilcox_test$p.value, 
+              size = 3, 
+              color = "black")
+
+```
+
+
+
+```{r}
+rafs <- read.csv("NestedRAFeatureSelection.csv")
+clrfs <- read.csv("NestedCLRFeatureSelectioncsv")
+
+ra_auc <- rafs[rafs$Model == "RandomForest", ]$AUC
+clr_auc <- clrfs[clrfs$Model == "LogisticRegression", ]$AUC
+
+
+# Combinar los datos en un único dataframe
+combined_data <- data.frame(
+  Method = c(rep("RA + FS + RF", length(ra_auc)), rep("CLR + FS + LR", length(clr_auc))),
+  AUC = c(ra_auc, clr_auc)
+)
+
+# Realizar el test de Wilcoxon
+wilcox_test <- wilcox.test(rafs[rafs$Model == "RandomForest", ]$AUC, clrfs[clrfs$Model == "LogisticRegression", ]$AUC, paired=TRUE)
+
+# Crear el boxplot
+g2 <- ggboxplot(
+  combined_data, 
+  x = "Method", 
+  y = "AUC", 
+  color = "Method", 
+  palette = "jco",
+  add = c("jitter", "mean")
+) + stat_summary(fun = mean, geom = "crossbar", size = 0.05, color = "red") +
+  stat_compare_means(method = "wilcox.test", paired=TRUE, label = "p.signif") + # Mostrar el valor p en el gráfico
+  labs(
+    x = "Normalization + Classifier",
+    y = "AUC"
+  ) +
+  theme_minimal() + 
+     annotate("text", 
+              x = 1, y = 0.95, # Ajusta la posición del texto en el gráfico
+              label = wilcox_test$p.value, 
+              size = 3, 
+              color = "black")
+
+```
+
+
