@@ -2,7 +2,7 @@ Scripts and notebooks used to run the pipelines.
 
 * **1. NestedNonFS.py:** Baseline classification with RA and CLR data.
 * **2. NestedFeatureSelection.py:** Feature Selection pipelines (LASSO, MIFS, mRMR, ReliefF)
-* **3. AE.py:** Feature Selection pipelines (LASSO, MIFS, mRMR, ReliefF)
+* **3. AE.py:** Feature Selection pipelines (AE. VAE)
 * **4. Cross Cohort Parkinson.ipynb:** Code for Cross-Cohort Analysis.
 * **5. MIFSmRMR.ipynb:** Code for figures and incremental analysis .
 * **6. TESTS.Rmd:** Code for boxplots and statistical tests.
