@@ -70,6 +70,10 @@ def run_experiment_ae(datasets, dim=50, norm = "TSS"):
             dm = DeepMicrobiome(dataset +"tssx.csv", seed=42, data_dir="")
         if norm =="CLR":
             dm = DeepMicrobiome(dataset +"x.csv", seed=42, data_dir="")
+        if norm =="logTSS":
+            dm = DeepMicrobiome(dataset +"logtssx.csv", seed=42, data_dir="")
+        if norm =="PA":
+            dm = DeepMicrobiome(dataset +"pax.csv", seed=42, data_dir="")
 
         dm.loadCustomData()
         start_time = time.time()
