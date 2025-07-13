@@ -21,7 +21,7 @@ from sklearn.linear_model import Lasso
 from sklearn.feature_selection import mutual_info_classif
 from sklearn.model_selection import cross_validate, GridSearchCV
 from sklearn.pipeline import Pipeline
-
+from skrebate import ReliefF
 import time
 
 
@@ -74,11 +74,15 @@ def FeatureSelector(n):
     if n == "ReliefF50":
         return ReliefF(n_features_to_select=50, n_neighbors=1.0, n_jobs=-1)   
     if n == "ReliefF100":
-        return ReliefF(n_features_to_select=50, n_neighbors=1.0, n_jobs=-1)
+        return ReliefF(n_features_to_select=100, n_neighbors=1.0, n_jobs=-1)
+    if n == "RFFS50":
+        return SelectFromModel(RandomForestClassifier(random_state=42, n_estimators=100), max_features=50)
+    if n == "RFFS100":
+        return SelectFromModel(RandomForestClassifier(random_state=42, n_estimators=100), max_features=100)
 
 def run_nested_cv_experiment_avg(datasets, normalization="TSS", method="Lasso"):
-    results = pd.DataFrame(columns=['Dataset', 'Model', 'AUC', 'AUC Std. Dev.', 'Accuracy', 'Std Accuracy', 'Time', 'Mean Selected'])
-    
+    results = pd.DataFrame(columns=['Dataset', 'Model', 'AUC', 'AUC Std. Dev.', 'Accuracy', 'Std Accuracy', 'Time'])
+    support = []
     for dataset in datasets:
         df = pd.read_csv("data/" + dataset + ".csv")
         y = df["label"]
@@ -88,6 +92,10 @@ def run_nested_cv_experiment_avg(datasets, normalization="TSS", method="Lasso"):
             df = pd.DataFrame(closure(df))
         if normalization == "CLR":
             df = pd.DataFrame(clr(closure(df + 0.5)))
+        if normalization == "logTSS":
+            df = pd.DataFrame(np.log10(closure(df + 0.5)))
+        if normalization == "PA":
+            df = (df>0).astype(int)
             
         label_encoder = LabelEncoder()
         y = label_encoder.fit_transform(y.squeeze())
@@ -98,7 +106,6 @@ def run_nested_cv_experiment_avg(datasets, normalization="TSS", method="Lasso"):
             auc_scores = []
             accuracy_scores = []
             times = []
-            selected_features_counts = []
             
             for train_idx, test_idx in outer_cv.split(df, y):
                 X_train, X_test = df.iloc[train_idx], df.iloc[test_idx]
@@ -118,10 +125,11 @@ def run_nested_cv_experiment_avg(datasets, normalization="TSS", method="Lasso"):
                 grid = GridSearchCV(estimator=pipe, param_grid=FS_GRID[model_name], cv=inner_cv, 
                                     scoring='roc_auc', refit=True, n_jobs=-1, verbose=1)
                 grid.fit(X_train, y_train)
+                #support.append(grid.best_estimator_.named_steps['feature_selection'].top_features_)
                 execution_time = time.time() - start_time
 
                 best_model = grid.best_estimator_
-                selected_features_counts.append(np.sum(best_model.named_steps['feature_selection'].get_support()))
+                #selected_features_counts.append(np.sum(best_model.named_steps['feature_selection'].get_support()))
                 y_pred_proba = best_model.predict_proba(X_test)[:, 1]
                 auc_scores.append(roc_auc_score(y_test, y_pred_proba))
                 accuracy_scores.append(best_model.score(X_test, y_test))
@@ -132,7 +140,9 @@ def run_nested_cv_experiment_avg(datasets, normalization="TSS", method="Lasso"):
             mean_accuracy = np.mean(accuracy_scores)
             std_accuracy = np.std(accuracy_scores)
             mean_time = np.mean(times)
-            mean_selected = np.mean(selected_features_counts)
+            #mean_selected = np.mean(selected_features_counts)
+
+            print(mean_accuracy)
             
             results.loc[len(results)] = [
                 dataset, 
@@ -140,15 +150,20 @@ def run_nested_cv_experiment_avg(datasets, normalization="TSS", method="Lasso"):
                 mean_auc, 
                 std_auc, 
                 mean_accuracy, 
-                std_accuracy, mean_time, mean_selected
+                std_accuracy, mean_time#, mean_selected
             ]
-    
     return results
 
-meths = ["Lasso", "MIFS50", "MIFS100", "mRMR50", "mRMR100", "ReliefF50", "ReliefF100"]
+
+
+meths = ["Lasso", "MIFS50", "MIFS100", "mRMR50", "mRMR100", "ReliefF50", "ReliefF100", "RFFS50", "RFFS100"]
 
 for M in meths:
     tss = run_nested_cv_experiment_avg(datasets, normalization="TSS", method=M)
     tss.to_csv("NestedTSS"+M+"Results.csv")
     clr = run_nested_cv_experiment_avg(datasets, normalization="CLR", method=M)
     clr.to_csv("NestedCLR"+M+"Results.csv")
+    logtss = run_nested_cv_experiment_avg(datasets, normalization="logTSS", method=M)
+    logtss.to_csv("NestedlogTSS"+M+"Results.csv")
+    pa = run_nested_cv_experiment_avg(datasets, normalization="PA", method=M)
+    pa.to_csv("NestedPA"+M+"Results.csv")
