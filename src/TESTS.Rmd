@@ -10,278 +10,416 @@ Try executing this chunk by clicking the *Run* button within the chunk or by pla
 library(tidyr)
 library(ggpubr)
 library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(patchwork)
+```
+```{r}
+tss <- read.csv("TSS Comparison.csv")
+clr <- read.csv("CLR Comparison.csv")
+logtss <- read.csv("logTSS Comparison.csv")
+pa <- read.csv("PA Comparison.csv")
+
+# Define custom colors
+colors <- c(
+  "Boosting" = "blue",
+  "LogisticRegression" = "grey",
+  "RandomForest" = "red",
+  "SVM" = "skyblue",
+  "KNN" = "yellow"
+)
+
+# Convert all datasets to long format
+tss_long <- tss %>%
+  pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance") %>%
+  mutate(Normalization = "RA")
+
+clr_long <- clr %>%
+  pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance") %>%
+  mutate(Normalization = "CLR")
+
+logtss_long <- logtss %>%
+  pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance") %>%
+  mutate(Normalization = "logRA")
+
+pa_long <- pa %>%
+  pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance") %>%
+  mutate(Normalization = "PA")
+
+all_data <- bind_rows(tss_long, clr_long, logtss_long, pa_long)
+all_data$Normalization <- factor(all_data$Normalization, levels = c("RA", "CLR", "logRA", "PA"))
+
+norm_colors <- c("RA" = "#2a78b4", "CLR" = "#f0c042", "logRA" = "#8c8c8c", "PA" = "#c85c57")
+
+classifier_colors <- c(
+  "Boosting" = "blue",
+  "LogisticRegression" = "grey",
+  "RandomForest" = "red",
+  "SVM" = "skyblue",
+  "KNN" = "yellow"
+)
+
+
+main_title <- ggdraw() + 
+  draw_label("", 
+             fontface = "bold", size = 18, x = 0, hjust = 0) +
+  theme(plot.margin = margin(0, 0, 10, 7))  # Espaciado inferior
+
+# 2(A): Overall Performance
+p_top <- ggplot(all_data, aes(x = Normalization, y = Performance, fill = Normalization)) +
+  geom_boxplot(width = 0.6, outlier.shape = NA) +
+  geom_jitter(alpha = 0.4, size = 1.5, width = 0.2) +
+  scale_fill_manual(values = norm_colors) +
+  labs(
+    subtitle = "Overall performance",
+    x = "",
+    y = "Performance (AUC)",
+    fill = "Normalization"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.subtitle = element_text(size = 13),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    legend.position = "right",
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 11),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+# 3. (B): Breakdown by Classifier
+p_bottom <- ggplot(all_data, aes(x = Normalization, y = Performance, fill = Classifier)) +
+  geom_boxplot(position = position_dodge(width = 0.8), outlier.shape = NA, width = 0.7) +
+  geom_jitter(position = position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
+              alpha = 0.6, size = 1) +
+  scale_fill_manual(values = classifier_colors) +
+  labs(
+    subtitle = "Performance breakdown by classifier",
+    x = "Normalization",
+    y = "Performance (AUC)",
+    fill = "Classifier"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.subtitle = element_text(size = 13),
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    legend.position = "right",
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 11),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+annotated_panel <- ggarrange(p_top, p_bottom,
+                             ncol = 1, nrow = 2,
+                             labels = c("A", "B"),
+                             font.label = list(size = 14, face = "bold"),
+                             align = "v",
+                             heights = c(1.2, 1.8)
+)
+
+final_plot <- plot_grid(main_title, annotated_panel, ncol = 1, rel_heights = c(0.1, 1))
+
+print(final_plot)
 ```
 
 
+
+
+
 ```{r}
-# Cargar la librería
-library(ggpubr)
+df_pivot <- all_data %>%
+     pivot_wider(
+         names_from = Normalization,
+         values_from = Performance
+     )
+     
+friedman.test(as.matrix(df_pivot[, 3:6]))
+friedman.test(as.matrix(tss[, 2:6]))
+friedman.test(as.matrix(clr[, 2:6]))
+friedman.test(as.matrix(logtss[, 2:6]))
+friedman.test(as.matrix(pa[, 2:6]))
+```
 
-# Leer los datos
-tss <- read.csv("TSS Comparison.csv")
-clr <- read.csv("CLR Comparison.csv")
-
-# Realizar las pruebas estadísticas
-rf_test <- wilcox.test(tss$RandomForest, clr$RandomForest, paired = TRUE)
-lr_test <- wilcox.test(tss$LogisticRegression, clr$LogisticRegression, paired = TRUE)
-cross_test <- wilcox.test(tss$RandomForest, clr$LogisticRegression, paired = TRUE)
-mean_test <- wilcox.test(rowMeans(tss[, -1]), rowMeans(clr[, -1]), paired = TRUE)
-
-resultado <- friedman.test(as.matrix(tss[, -1]))
-p_annotation <- paste0("Friedman Test p-value: ", signif(resultado$p.value, 3))
-
-
-tss_long <- tss %>%
-    pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance")
-
-clr_long <- clr %>%
-    pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance")
-
-g1 <- ggboxplot(
-     data = tss_long,
-     x = "Classifier", 
-     y = "Performance",
-     color = "Classifier", # Opcional: para colorear por clasificador
-     palette = "jco",      # Paleta de colores
-     add = "jitter",       # Agrega puntos dispersos para ver la variabilidad
-     xlab = "Classifiers", 
-     ylab = "Performance (AUC)",
-     #title = "Performance by Classifier with Relative Abundances"
- ) + 
-     annotate("text", 
-              x = 4, y = 0.95, # Ajusta la posición del texto en el gráfico
-              label = p_annotation, 
-              size = 6, 
-              color = "black") +
-  theme(
-    legend.text = element_text(size = 16) # Cambia el tamaño de la letra de la leyenda
-  )
-
-resultado <- friedman.test(as.matrix(clr[, -1]))
-p_annotation <- paste0("Friedman Test p-value: ", signif(resultado$p.value, 3))
-
-g2 <- ggboxplot(
-     data = clr_long,
-     x = "Classifier", 
-     y = "Performance",
-     color = "Classifier", # Opcional: para colorear por clasificador
-     palette = "jco",      # Paleta de colores
-     add = "jitter",       # Agrega puntos dispersos para ver la variabilidad
-     xlab = "Classifiers", 
-     ylab = "Performance (AUC)",
-     #title = "Performance by Classifier with CLR Normalization"
- ) + 
-     annotate("text", 
-              x = 4, y = 0.95, # Ajusta la posición del texto en el gráfico
-              label = p_annotation, 
-              size = 6, 
-              color = "black") +
-  theme(
-    legend.text = element_text(size = 16) # Cambia el tamaño de la letra de la leyenda
-  )
-
-
-
-# Preparar los datos para ggpubr
+```{r}
+  # Preparar los datos para ggpubr
 df_rf <- data.frame(
-  Method = rep(c("RA", "CLR"), each = nrow(tss)),
-  Performance = c(tss$RandomForest, clr$RandomForest)
+  Method = rep(c("RA", "CLR", "logRA", "PA"), each = nrow(tss)),
+  Performance = c(tss$RandomForest, clr$RandomForest, logtss$RandomForest, pa$RandomForest)
 )
 
 df_lr <- data.frame(
-  Method = rep(c("RA", "CLR"), each = nrow(tss)),
-  Performance = c(tss$LogisticRegression, clr$LogisticRegression)
+  Method = rep(c("RA", "CLR", "logRA", "PA"), each = nrow(tss)),
+  Performance = c(tss$LogisticRegression, clr$LogisticRegression, logtss$LogisticRegression, pa$LogisticRegression)
 )
 
 df_cross <- data.frame(
-  Method = rep(c("RA_RF", "CLR_LR"), each = nrow(tss)),
-  Performance = c(tss$RandomForest, clr$LogisticRegression)
+  Method = rep(c("RA+RF", "CLR+LR", "logRA+LR", "PA+RF"), each = nrow(tss)),
+  Performance = c(tss$RandomForest, clr$LogisticRegression, logtss$LogisticRegression, pa$RandomForest)
 )
-
-df_mean <- data.frame(
-  Method = rep(c("RA_Mean", "CLR_Mean"), each = nrow(tss)),
-  Performance = c(rowMeans(tss[, -1]), rowMeans(clr[, -1]))
-)
-
+common_ylim <- c(0.52, 0.94)
 # Graficar Random Forest
 rf_plot <- ggboxplot(
   df_rf, x = "Method", y = "Performance", fill = "Method",
   palette = "jco", add = "jitter", title = "Random Forest Comparison"
-) +
-  stat_compare_means(
-    method = "wilcox.test", paired = TRUE,
-    label = "p.format", 
-    comparisons = list(c("RA", "CLR"))
-  ) +
-  labs(y = "Performance (AUC)", x = "")
+) + theme(legend.position = "none") +
+  labs(y = "Performance (AUC)", x = "")+
+  scale_y_continuous(limits = common_ylim)
 
 # Graficar Logistic Regression
 lr_plot <- ggboxplot(
   df_lr, x = "Method", y = "Performance", fill = "Method",
   palette = "jco", add = "jitter", title = "Logistic Regression Comparison"
-) +
-  stat_compare_means(
-    method = "wilcox.test", paired = TRUE,
-    label = "p.format", 
-    comparisons = list(c("RA", "CLR"))
-  ) +
-  labs(y = "Performance (AUC)", x = "")
+) + theme(legend.position = "none") +
+  
+  labs(y = "Performance (AUC)", x = "")+
+  scale_y_continuous(limits = common_ylim)
 
 # Comparación cruzada
 cross_plot <- ggboxplot(
   df_cross, x = "Method", y = "Performance", fill = "Method",
-  palette = "jco", add = "jitter", title = "Cross Comparison (RF vs LR)"
-) +
-  stat_compare_means(
-    method = "wilcox.test", paired = TRUE,
-    label = "p.format", 
-    comparisons = list(c("RA_RF", "CLR_LR"))
-  ) +
-  labs(y = "Performance (AUC)", x = "")
+  palette = "jco", add = "jitter", title = "Cross Comparison (Best Classifiers)"
+) + theme(legend.position = "none") +
+  
+  labs(y = "Performance (AUC)", x = "")+
+  scale_y_continuous(limits = common_ylim)
 
-mean_plot <- ggboxplot(
-  df_mean, x = "Method", y = "Performance", fill = "Method",
-  palette = "jco", add = "jitter", title = "Mean Comparison (All Classifiers)"
-) +
-  stat_compare_means(
-    method = "wilcox.test", paired = TRUE,
-    label = "p.format", 
-    comparisons = list(c("RA_Mean", "CLR_Mean"))
-  ) +
-  labs(y = "Performance (AUC)", x = "")
 
-# Combinar gráficos
-combined_plot <- ggarrange(rf_plot, lr_plot, cross_plot, mean_plot, 
-                           ncol = 4, nrow = 1, 
-                           labels = c("A", "B", "C", "D"))+
+combined_plot <- (rf_plot | lr_plot | cross_plot) +
+  plot_annotation(tag_levels = 'A') & 
   theme(
-    legend.text = element_text(size = 19) # Cambia el tamaño de la letra de la leyenda
+    legend.position = "none",   # Aquí se quita la leyenda
+    legend.text = element_text(size = 10),
+    plot.tag.position = c(0.03, 0.98),
+    plot.tag = element_text(face = "bold", size = 16)
   )
 
+df_rf <- df_rf %>%
+  group_by(Method) %>%
+  mutate(row = row_number()) %>%
+  ungroup()
+df_widerf <- df_rf %>%
+  pivot_wider(names_from = Method, values_from = Performance)
+friedman.test(as.matrix(df_widerf[, -1])) 
+
+df_lr <- df_lr %>%
+  group_by(Method) %>%
+  mutate(row = row_number()) %>%
+  ungroup()
+df_widelr <- df_lr %>%
+  pivot_wider(names_from = Method, values_from = Performance)
+friedman.test(as.matrix(df_widelr[, -1])) 
+
+
+df_cross <- df_cross %>%
+  group_by(Method) %>%
+  mutate(row = row_number()) %>%
+  ungroup()
+
+# Pivotamos
+df_wide <- df_cross %>%
+  pivot_wider(names_from = Method, values_from = Performance)
+  
+friedman.test(as.matrix(df_wide[, -1]))  
 # Mostrar los gráficos
 print(combined_plot)
+```
+```{r}
+rarefactions <- read.csv("Rarefaction Comparison.csv")
+normalizations <- unique(rarefactions$Normalization)
 
+for (norm in normalizations) {
+  cat("\n\n--- Normalization:", norm, "---\n")
 
+  df <- subset(rarefactions, Normalization == norm)
 
+  none <- subset(df, Method == "None")
+  rare <- subset(df, Method == "Rare")
+  rareq5 <- subset(df, Method == "RareQ5")
+
+    cat("None vs Rare:\n")
+    print(wilcox.test(none$AUC, rare$AUC, paired = TRUE))
+    
+    cat("None vs RareQ5:\n")
+    print(wilcox.test(none$AUC, rareq5$AUC, paired = TRUE))
+    
+    cat("Rare vs RareQ5:\n")
+    print(wilcox.test(rare$AUC, rareq5$AUC, paired = TRUE))
+  
+}
+common_ylim <- c(min(rarefactions$AUC), max(rarefactions$AUC))
+
+# Initialize an empty list to store ggplot objects
+plot_list <- list()
+
+for (norm in normalizations) {
+  # Subset data for this normalization
+  df_norm <- subset(rarefactions, Normalization == norm)
+  
+  # Create the ggboxplot for the current normalization
+  p <- ggboxplot(
+    df_norm,
+    x = "Method",
+    y = "AUC",
+    fill = "Method",
+    palette = "jco", # Using the 'jco' palette as in your example
+    add = "jitter",
+    title = paste("Normalization:", norm)
+  ) +
+    theme(
+      legend.position = "none", # Remove legend for individual plots
+      plot.title = element_text(hjust = 0.5) # Center plot title
+    ) +
+    labs(y = "Performance (AUC)", x = "") + # Y-axis label and empty X-axis label
+    scale_y_continuous(limits = common_ylim) # Apply common Y-axis limit
+  
+  # Add the plot to the list
+  plot_list[[norm]] <- p
+}
+
+  if (length(plot_list) == 4) {
+    combined_plot <- (plot_list[[1]] | plot_list[[2]]) / (plot_list[[3]] | plot_list[[4]]) +
+      plot_annotation(tag_levels = 'A') &
+      theme(
+        legend.position = "none",
+        legend.text = element_text(size = 10),
+        plot.tag.position = c(0.03, 0.98),
+        plot.tag = element_text(face = "bold", size = 16)
+      )
+  } else {
+    # For a variable number of plots, wrap_plots is more flexible
+    combined_plot <- wrap_plots(plot_list, ncol = 2) + # Adjust ncol as needed
+      plot_annotation(tag_levels = 'A') &
+      theme(
+        legend.position = "none",
+        legend.text = element_text(size = 10),
+        plot.tag.position = c(0.03, 0.98),
+        plot.tag = element_text(face = "bold", size = 16)
+      )
+  }
+  
+  # Print the combined plot
+  print(combined_plot)
 ```
 
 
 
 
+
 ```{r}
-library(ggpubr)
-lr <- read.csv("LRComparison.csv")
+cfs <- read.csv("CombinedFS.csv")
 
-resultado <- friedman.test(as.matrix(lr[, -1]))
-p_annotation <- paste0("Friedman Test p-value: ", signif(resultado$p.value, 3))
+cfs_long <- cfs %>%
+  pivot_longer(
+    cols = c(RA, CLR, logRA, PA),
+    names_to = "Normalization",
+    values_to = "Performance"
+  )
+
+cfs_long$Normalization <- factor(cfs_long$Normalization, levels = c("RA", "CLR", "logRA", "PA"))
+
+my_colors <- c("RA" = "#2a78b4", "CLR" = "#f0c042", "logRA" = "#8c8c8c", "PA" = "#c85c57")
 
 
-
-lr_long <- lr %>%
-    pivot_longer(cols = -Dataset, names_to = "Classifier", values_to = "Performance")
-
-colnames(lr_long) <- c("Dataset", "Method", "Performance")
-
-
-g <- ggboxplot(
-     data = lr_long,
-     x = "Method", 
-     y = "Performance",
-     color = "Method", # Opcional: para colorear por clasificador
-     palette = "jco",      # Paleta de colores
-     add = "jitter",       # Agrega puntos dispersos para ver la variabilidad
-     xlab = "Feature Selection Method", 
-     ylab = "Performance (AUC)",
-     title = "Logistic Regression performance with Feature Selection"
- ) + 
-     annotate("text", 
-              x = 8, y = 0.95, # Ajusta la posición del texto en el gráfico
-              label = p_annotation, 
-              size = 4, 
-              color = "black")
-
+FSFRIED <- ggplot(cfs_long, aes(x = Normalization, y = Performance, fill = Normalization)) +
+  geom_boxplot(show.legend = FALSE, outlier.shape = NA) +  
+  geom_jitter(color = "black", width = 0.15, size = 1.5, alpha = 0.7) +  
+  scale_fill_manual(values = my_colors) +
+  labs(
+    title = "",
+    x = NULL,
+    y = "Performance (AUC)"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    axis.title.y = element_text(size = 14),
+    axis.text = element_text(size = 12), legend.position = "none"
+  )
 
 ```
 
 
+```{r}
+# Filtrar datos CLR
+clrfs <- read.csv("NestedCLRFeatureSelectionFINAL.csv")[c("Dataset", "Model", "FS_Method", "AUC")]
+
+
+# Crear una matriz con filas = datasets y columnas = modelos
+df_wide <- clrfs %>%
+  pivot_wider(
+    names_from = Model,       # Las columnas nuevas se crean con los nombres de Model
+    values_from = AUC         # Los valores que se colocan en esas columnas vienen de AUC
+  )
+
+# Aplicar el test de Friedman
+ftt <- friedman.test(as.matrix(df_wide[c(-1, -2)]))
+print(ftt$p.value)
+```
+
 
 ```{r}
-rafs <- read.csv("NestedRAFeatureSelection.csv")
-clrfs <- read.csv("NestedCLRFeatureSelection.csv")
+lrfs <- clrfs %>%
+  filter(Model == "LogisticRegression") %>%
+  mutate(FS_Method = reorder(FS_Method, AUC, FUN = median))
 
 
-# Combinar los datos en un único dataframe
-combined_data <- data.frame(
-  Method = rep(c("RA", "CLR"), each = nrow(rafs)),
-  AUC = c(rafs$AUC, clrfs$AUC)
+colores_personalizados <- c(
+  "LASSO"     = "#7979c7",
+  "AE50"      = "#FFD700",
+  "AE100"     = "#377eb8",
+  "VAE"       = "#999999",
+  "MRMR50"    = "#000000",
+  "MRMR100"   = "#8b0000",
+  "MIFS50"    = "#1414b8",
+  "MIFS100"   = "#8f7700",
+  "Relief50"  = "#e41a1c",
+  "Relief100" = "#87CEEB",
+  "RF50"      = "#90EE90",  # Verde claro y brillante (LightGreen)
+  "RF100"     = "#228B22"   # Verde bosque oscuro (ForestGreen)
 )
 
-# Realizar el test de Wilcoxon
-wilcox_test <- wilcox.test(rafs$AUC, clrfs$AUC, paired=TRUE)
 
-# Crear el boxplot
-g1 <- ggboxplot(
-  combined_data, 
-  x = "Method", 
-  y = "AUC", 
-  color = "Method", 
-  palette = "jco",
-  add = "jitter"
-) +
-  stat_compare_means(method = "wilcox.test", paired=TRUE, label = "p.signif") + # Mostrar el valor p en el gráfico
-  labs(
-    x = "Normalization Technique",
-    y = "AUC"
+fsp <- ggplot(lrfs, aes(x = FS_Method, y = AUC, fill = FS_Method)) +
+  
+  # Boxplot con un borde negro para mejor contraste y sin outliers
+  geom_boxplot(outlier.shape = NA, alpha = 0.9, color = "black") +
+  
+  # Jitter con puntos oscuros para que resalten sobre cualquier color
+  geom_jitter(position = position_jitter(width = 0.2), alpha = 0.4, size = 1.5, color = "black") +
+  
+  # Aplicar la paleta de colores personalizada
+  scale_fill_manual(
+    values = colores_personalizados,
+    name = "Method"  # <-- Aquí cambiamos el título de la leyenda
   ) +
-  theme_minimal() + 
-     annotate("text", 
-              x = 2, y = 0.95, # Ajusta la posición del texto en el gráfico
-              label = wilcox_test$p.value, 
-              size = 3, 
-              color = "black")
-
-```
-
-
-
-```{r}
-rafs <- read.csv("NestedRAFeatureSelection.csv")
-clrfs <- read.csv("NestedCLRFeatureSelectioncsv")
-
-ra_auc <- rafs[rafs$Model == "RandomForest", ]$AUC
-clr_auc <- clrfs[clrfs$Model == "LogisticRegression", ]$AUC
-
-
-# Combinar los datos en un único dataframe
-combined_data <- data.frame(
-  Method = c(rep("RA + FS + RF", length(ra_auc)), rep("CLR + FS + LR", length(clr_auc))),
-  AUC = c(ra_auc, clr_auc)
-)
-
-# Realizar el test de Wilcoxon
-wilcox_test <- wilcox.test(rafs[rafs$Model == "RandomForest", ]$AUC, clrfs[clrfs$Model == "LogisticRegression", ]$AUC, paired=TRUE)
-
-# Crear el boxplot
-g2 <- ggboxplot(
-  combined_data, 
-  x = "Method", 
-  y = "AUC", 
-  color = "Method", 
-  palette = "jco",
-  add = c("jitter", "mean")
-) + stat_summary(fun = mean, geom = "crossbar", size = 0.05, color = "red") +
-  stat_compare_means(method = "wilcox.test", paired=TRUE, label = "p.signif") + # Mostrar el valor p en el gráfico
+  
+  # Etiquetas y títulos
   labs(
-    x = "Normalization + Classifier",
-    y = "AUC"
+    title = "",
+    x = "Feature Selection Method",
+    y = "Performance (AUC)"
   ) +
-  theme_minimal() + 
-     annotate("text", 
-              x = 1, y = 0.95, # Ajusta la posición del texto en el gráfico
-              label = wilcox_test$p.value, 
-              size = 3, 
-              color = "black")
+  
+  # Tema minimalista y personalizado
+  theme_minimal(base_size = 14) +
+  
+  # Cambiamos la posición de la leyenda y ajustamos su estilo
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "right",
+    legend.title = element_text(size = 11, face = "bold"),  # <- puedes ajustar también el estilo del título
+    legend.text = element_text(size = 10)
+  )
 
+auc_matrix <- lrfs %>%
+  select(Dataset, FS_Method, AUC) %>%
+  pivot_wider(names_from = FS_Method, values_from = AUC)
+
+# Quitar la columna Dataset para la prueba Friedman
+auc_values <- as.matrix(auc_matrix[,-1])
+
+friedman.test(auc_values)
 ```
-
-
