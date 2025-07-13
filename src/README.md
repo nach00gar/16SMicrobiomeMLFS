@@ -6,7 +6,7 @@ Scripts and notebooks used to run the pipelines.
 * **4. Cross Cohort Parkinson.ipynb:** Code for Cross-Cohort Analysis.
 * **5. MIFSmRMR.ipynb:** Code for figures and incremental analysis .
 * **6. TESTS.Rmd:** Code for boxplots and statistical tests.
-* **7. CriticalDiagrams.ipynb:** Code for Finner Posthoc test and critical diagrams.
+* **7. Critical Diagrams Generation.ipynb:** Code for Finner Posthoc test and critical diagrams.
 * **8. DM.py:** DeepMicro [1] code slightly tuned for our data and use case.
 * **9. mrmr_feature_selector.py:** mRMR adapted to scikit-learn interface.
 
